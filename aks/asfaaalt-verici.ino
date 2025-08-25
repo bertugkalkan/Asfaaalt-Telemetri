@@ -4,13 +4,11 @@
 #include "LoRa_E220.h"
 #include <LiquidCrystal_I2C.h>
 
-// --- SD KART VE YEDEKLEME AYARLARI ---
-const int chipSelect = 4; // SD kart modülünün CS pini
+const int chipSelect = 4; // SD kart modülünün CS pini girilmeli.
 const char* unsentLogFile = "unsent.txt";
 const char* tempLogFile = "temp.txt";
-unsigned long outageStartTime = 0; // Sinyal kesintisinin başlangıç zamanını tutar. 0 ise kesinti yok demek.
+unsigned long outageStartTime = 0; // Sinyal kesintisinin başlangıç zamanı tutulacak
 
-//bağlantı pinleri ayarlayın
 #define M0_PIN 7
 #define M1_PIN 6
 #define AUX_PIN 5
@@ -18,23 +16,23 @@ unsigned long outageStartTime = 0; // Sinyal kesintisinin başlangıç zamanın�
 #define RX_PIN 2
 
 
-SoftwareSerial loraSerial(RX_PIN, TX_PIN);  // RX, TX
+SoftwareSerial loraSerial(RX_PIN, TX_PIN);  
 
 LoRa_E220 e220ttl(&loraSerial, AUX_PIN, M0_PIN, M1_PIN);
 
 LiquidCrystal_I2C lcd(0x27,16,2);
 
-const int hallPin = 2; // Hall sensör giriş pini
+const int hallPin = 2; 
 volatile unsigned long lastTime = 0;
 volatile unsigned long period = 0;
 
-unsigned long lastChangeTime = 0; // Son RPM değişim zamanı
+unsigned long lastChangeTime = 0; 
 double lastRPM = 0;
 
 const int sensorPin = A0;
 const float VCC = 5.0;
-const float sensitivity = 40.0; // mV/A (ACS758LCB-050B için)
-const float zeroCurrentVoltage = VCC / 2; // 2.5V
+const float sensitivity = 40.0; 
+const float zeroCurrentVoltage = VCC / 2; 
 
 
 void logUnsent(const String& data);
@@ -46,11 +44,10 @@ void setup() {
   Serial.begin(9600);
   delay(500);
 
-  // SD Kartı başlat
   Serial.print("SD Kart baslatiliyor...");
   if (!SD.begin(chipSelect)) {
     Serial.println("HATA: SD Kart baslatilamadi! Program durduruluyor.");
-    while (1); // Hata durumunda programı durdur
+    while (1); 
   }
   Serial.println("OK");
 
@@ -83,24 +80,24 @@ void loop() {
   if (backlogData.length() > 0) {
     // Birikmiş veri var. Göndermeyi dene.
     if (e220ttl.sendFixedMessage(0, 5, 18, backlogData).isSuccess()) {
-      // BAŞARILI: Birikmiş veri gönderildi.
+      // BAŞARILIYSA
       outageStartTime = 0; // Bağlantı var demektir, kesinti sayacını sıfırla.
       Serial.println("Birikmis veri gonderildi: " + backlogData);
-      removeFirstLine(unsentLogFile); // Gönderilen veriyi dosyadan sil.
+      removeFirstLine(unsentLogFile); // Gönderilen veriyi dosya başından silme.
       
-      // Canlı veriyi de kaybolmaması için sıranın sonuna ekle.
+      // Canlı veri uyumlu olsun diye en sona ekleme.
       logUnsent(liveMessage);
       Serial.println("Anlik veri siraya eklendi: " + liveMessage);
 
     } else {
-      // BAŞARISIZ: Birikmiş veri gönderilemedi, bağlantı hala yok.
+      // BAŞARISIZSA Bağlantı Yok.
       // Kesinti sayacının başladığından emin ol.
       if (outageStartTime == 0) {
           outageStartTime = millis();
           Serial.println("Sinyal kesintisi basladi.");
       }
       
-      // 60 saniye kuralını kontrol et ve eğer süre dolmadıysa canlı veriyi sıraya ekle.
+      // 60 saniye kuralın kontrol
       if (millis() - outageStartTime < 60000) {
         logUnsent(liveMessage);
         Serial.println("Baglanti yok, anlik veri de siraya eklendi: " + liveMessage);
@@ -109,7 +106,7 @@ void loop() {
       }
     }
   } else {
-    // --- Adım 3: Birikmiş veri yoksa, canlı veriyle ilgilen ---
+    // Birikmiş Yoksa Canlıya Hopla
     if (e220ttl.sendFixedMessage(0, 5, 18, liveMessage).isSuccess()) {
       // BAŞARILI: Canlı veri gitti. Her şey yolunda.
       outageStartTime = 0; // Kesinti sayacını sıfır tut.
