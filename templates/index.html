@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>Telemetri Paneli</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+	<link rel="stylesheet" href="/static/styles.css" />
+	<script src="https://cdn.socket.io/4.7.5/socket.io.min.js" integrity="sha384-qzdn1qFAtRK8h0s5fXQ6Czq3EhZqD+4gU4N7TTAI6x8V2cH0c3KGi5K7yJo5Jm6C" crossorigin="anonymous"></script>
+	<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+	<header class="topbar">
+		<div class="brand">⚡ Telemetri</div>
+		<div class="status" id="status-indicator">Bağlanıyor…</div>
+	</header>
+
+	<main class="container">
+		<section class="kpis">
+			<div class="kpi"><div class="label">Hız</div><div class="value" id="kpi-speed">-</div><div class="unit">km/h</div></div>
+			<div class="kpi"><div class="label">T Batarya</div><div class="value" id="kpi-tbat">-</div><div class="unit">°C</div></div>
+			<div class="kpi"><div class="label">V Batarya</div><div class="value" id="kpi-vbat">-</div><div class="unit">V</div></div>
+			<div class="kpi"><div class="label">Kalan Enerji</div><div class="value" id="kpi-energy">-</div><div class="unit">Wh</div></div>
+		</section>
+
+		<section class="charts">
+			<canvas id="chart-speed"></canvas>
+			<canvas id="chart-temp"></canvas>
+			<canvas id="chart-voltage"></canvas>
+			<canvas id="chart-energy"></canvas>
+		</section>
+	</main>
+
+	<script src="/static/app.js"></script>
+</body>
+</html>
