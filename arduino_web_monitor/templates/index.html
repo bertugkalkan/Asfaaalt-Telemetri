@@ -95,15 +95,13 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            // Grafikte gösterilecek maksimum veri noktası sayısı
             const MAX_DATA_POINTS = 50;
 
-            // Chart.js Grafik Kurulumu
             const ctx = document.getElementById('dataChart').getContext('2d');
             const dataChart = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: [], // Zaman etiketleri
+                    labels: [],
                     datasets: [
                         {
                             label: 'Hız (km/h)',
@@ -112,7 +110,7 @@
                             backgroundColor: 'rgba(54, 162, 235, 0.2)',
                             borderWidth: 2,
                             yAxisID: 'y',
-                            tension: 0.2 // Çizgileri yumuşatır
+                            tension: 0.2
                         },
                         {
                             label: 'Sıcaklık (°C)',
@@ -137,7 +135,7 @@
                 options: {
                     responsive: true,
                     animation: {
-                        duration: 250 // Animasyon süresini kısaltarak daha akıcı hissettirir
+                        duration: 250
                     },
                     interaction: {
                         mode: 'index',
@@ -168,7 +166,7 @@
                                 text: 'Sıcaklık (°C)'
                             },
                             grid: {
-                                drawOnChartArea: false, // Sadece y1 ekseni için grid'i gizle
+                                drawOnChartArea: false,
                             },
                         }
                     }
@@ -182,19 +180,14 @@
             let randomDataInterval;
             const randomDataSwitch = document.getElementById('randomDataSwitch');
 
-            // UI'ı güncelleyen merkezi fonksiyon
             function updateUI(data) {
-                // Sayısal göstergeleri güncelle
                 document.getElementById('speed_val').textContent = data.speed_kmh.toFixed(1);
                 document.getElementById('temp_val').textContent = data.temp_c.toFixed(1);
                 document.getElementById('voltage_val').textContent = data.voltage_v.toFixed(1);
                 document.getElementById('energy_val').textContent = data.energy_wh.toFixed(0);
-
-                // Grafik verilerini güncelle
                 updateChart(data);
             }
 
-            // Rastgele veri üreten fonksiyon
             function generateRandomData() {
                 const randomData = {
                     speed_kmh: 45.5 + (Math.sin(Date.now() / 1000.0) * 10.0),
@@ -205,23 +198,18 @@
                 updateUI(randomData);
             }
 
-            // Switch'e event listener ekle
             randomDataSwitch.addEventListener('change', (event) => {
                 isRandomMode = event.target.checked;
                 if (isRandomMode) {
-                    // Rastgele mod AÇIK
                     console.log('Rastgele veri modu AKTİF.');
                     socket.disconnect();
-                    // Mevcut grafiği temizle
                     dataChart.data.labels = [];
                     dataChart.data.datasets.forEach((dataset) => {
                         dataset.data = [];
                     });
                     dataChart.update();
-                    // Rastgele veri üreticisini başlat
                     randomDataInterval = setInterval(generateRandomData, 500);
                 } else {
-                    // Rastgele mod KAPALI
                     console.log('Rastgele veri modu KAPALI. Sunucuya bağlanılıyor...');
                     clearInterval(randomDataInterval);
                     socket.connect();
@@ -232,33 +220,26 @@
                 console.log('Sunucuya başarıyla bağlanıldı!');
             });
 
-            // Sunucudan 'update_data' olayı geldiğinde çalışacak fonksiyon
             socket.on('update_data', function(data) {
-                // Sadece rastgele mod kapalıyken sunucudan gelen veriyi işle
                 if (!isRandomMode) {
                     updateUI(data);
                 }
             });
 
             function updateChart(data) {
-                // Yeni zaman etiketini ekle (HH:MM:SS formatında)
                 const timeLabel = new Date().toLocaleTimeString('tr-TR');
                 dataChart.data.labels.push(timeLabel);
 
-                // Veri setlerine yeni verileri ekle
                 dataChart.data.datasets[0].data.push(data.speed_kmh);
                 dataChart.data.datasets[1].data.push(data.temp_c);
                 dataChart.data.datasets[2].data.push(data.voltage_v);
 
-                // Eğer veri noktası sayısı maksimumu aştıysa, en eski veriyi sil
                 if (dataChart.data.labels.length > MAX_DATA_POINTS) {
                     dataChart.data.labels.shift();
                     dataChart.data.datasets.forEach((dataset) => {
                         dataset.data.shift();
                     });
                 }
-
-                // Grafiği yeniden çiz
                 dataChart.update();
             }
         });
