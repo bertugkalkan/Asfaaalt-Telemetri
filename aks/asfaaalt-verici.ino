@@ -1,6 +1,14 @@
+#include <SPI.h>
+#include <SD.h>
 #include <SoftwareSerial.h>
 #include "LoRa_E220.h"
 #include <LiquidCrystal_I2C.h>
+
+// --- SD KART VE YEDEKLEME AYARLARI ---
+const int chipSelect = 4; // SD kart modülünün CS pini
+const char* unsentLogFile = "unsent.txt";
+const char* tempLogFile = "temp.txt";
+unsigned long outageStartTime = 0; // Sinyal kesintisinin başlangıç zamanını tutar. 0 ise kesinti yok demek.
 
 //bağlantı pinleri ayarlayın
 #define M0_PIN 7
@@ -28,9 +36,23 @@ const float VCC = 5.0;
 const float sensitivity = 40.0; // mV/A (ACS758LCB-050B için)
 const float zeroCurrentVoltage = VCC / 2; // 2.5V
 
+
+void logUnsent(const String& data);
+String readFirstLine(const char* filename);
+void removeFirstLine(const char* filename);
+
+
 void setup() {
   Serial.begin(9600);
   delay(500);
+
+  // SD Kartı başlat
+  Serial.print("SD Kart baslatiliyor...");
+  if (!SD.begin(chipSelect)) {
+    Serial.println("HATA: SD Kart baslatilamadi! Program durduruluyor.");
+    while (1); // Hata durumunda programı durdur
+  }
+  Serial.println("OK");
 
   e220ttl.begin();
 
@@ -40,7 +62,7 @@ void setup() {
   pinMode(hallPin, INPUT);
   attachInterrupt(digitalPinToInterrupt(hallPin), measurePeriod, FALLING);
 
-  Serial.println("Gönderici başlatıldı LOG");
+  Serial.println("Gonderici baslatildi LOG");
 }
 
 void loop() {
@@ -50,20 +72,64 @@ void loop() {
   double V_bat_C = random(36, 54) / 1.0;
   double kalan_enerji_Wh = random(0, 500);
 
-  String message = String(zaman) + ";" +
+  String liveMessage = String(zaman) + ";" +
                    String(hiz) + ";" +
                    String(T_bat_C) + ";" +
                    String(V_bat_C, 1) + ";" +
                    String(kalan_enerji_Wh);
 
-  ResponseStatus rs = e220ttl.sendFixedMessage(0, 5, 18, message);
+  String backlogData = readFirstLine(unsentLogFile);
   
-  Serial.print("Mesaj gönderildi: ");
-  Serial.println(message);
-  Serial.print("Durum: ");
-  Serial.println(rs.getResponseDescription());
+  if (backlogData.length() > 0) {
+    // Birikmiş veri var. Göndermeyi dene.
+    if (e220ttl.sendFixedMessage(0, 5, 18, backlogData).isSuccess()) {
+      // BAŞARILI: Birikmiş veri gönderildi.
+      outageStartTime = 0; // Bağlantı var demektir, kesinti sayacını sıfırla.
+      Serial.println("Birikmis veri gonderildi: " + backlogData);
+      removeFirstLine(unsentLogFile); // Gönderilen veriyi dosyadan sil.
+      
+      // Canlı veriyi de kaybolmaması için sıranın sonuna ekle.
+      logUnsent(liveMessage);
+      Serial.println("Anlik veri siraya eklendi: " + liveMessage);
+
+    } else {
+      // BAŞARISIZ: Birikmiş veri gönderilemedi, bağlantı hala yok.
+      // Kesinti sayacının başladığından emin ol.
+      if (outageStartTime == 0) {
+          outageStartTime = millis();
+          Serial.println("Sinyal kesintisi basladi.");
+      }
+      
+      // 60 saniye kuralını kontrol et ve eğer süre dolmadıysa canlı veriyi sıraya ekle.
+      if (millis() - outageStartTime < 60000) {
+        logUnsent(liveMessage);
+        Serial.println("Baglanti yok, anlik veri de siraya eklendi: " + liveMessage);
+      } else {
+        Serial.println("60sn doldu, yeni veri (" + liveMessage + ") kaydedilmiyor.");
+      }
+    }
+  } else {
+    // --- Adım 3: Birikmiş veri yoksa, canlı veriyle ilgilen ---
+    if (e220ttl.sendFixedMessage(0, 5, 18, liveMessage).isSuccess()) {
+      // BAŞARILI: Canlı veri gitti. Her şey yolunda.
+      outageStartTime = 0; // Kesinti sayacını sıfır tut.
+      Serial.println("Anlik veri gonderildi: " + liveMessage);
+    } else {
+      // BAŞARISIZ: Canlı veri gönderilemedi. Kesintiyi başlat ve veriyi logla.
+      if (outageStartTime == 0) {
+          outageStartTime = millis();
+          Serial.println("Sinyal kesintisi basladi.");
+      }
+      
+      // 60 saniye kuralı burada da geçerli.
+      if (millis() - outageStartTime < 60000) {
+        logUnsent(liveMessage);
+        Serial.println("Baglanti yok, anlik veri SD karta kaydedildi: " + liveMessage);
+      }
+    }
+  }
   
-  delay(2000);  
+  delay(2000);
 }
 
 double getSpeed() {
@@ -74,13 +140,11 @@ double getSpeed() {
     rpm = 30.0 / saniye;
   }
 
-  // RPM değiştiyse zamanı güncelle
   if (rpm != lastRPM) {
     lastChangeTime = millis();
     lastRPM = rpm;
   }
 
-  // Son değişim 3 saniyeden fazla ise RPM=0
   if (millis() - lastChangeTime > 3000) {
     rpm = 0;
   }
@@ -107,3 +171,71 @@ void yaz(int cursor, String yazi) {
   lcd.print(yazi);
 }
 
+// --- YENİ EKLENEN SD KART FONKSİYONLARI ---
+
+// Veriyi log dosyasının sonuna ekler
+void logUnsent(const String& data) {
+  File file = SD.open(unsentLogFile, FILE_WRITE);
+  if (file) {
+    file.println(data);
+    file.close();
+  } else {
+    Serial.println("HATA: Log dosyasi (unsent.txt) acilamadi!");
+  }
+}
+
+// Dosyanın ilk satırını okur
+String readFirstLine(const char* filename) {
+  File file = SD.open(filename);
+  String firstLine = "";
+  if (file && file.size() > 0) {
+    while (file.available()) {
+      char c = file.read();
+      if (c == '\n') {
+        break;
+      }
+      firstLine += c;
+    }
+  }
+  file.close();
+  return firstLine;
+}
+
+// Dosyanın ilk satırını siler
+void removeFirstLine(const char* filename) {
+  File originalFile = SD.open(filename, FILE_READ);
+  File tempFile = SD.open(tempLogFile, FILE_WRITE);
+
+  if (!originalFile || !tempFile) {
+    Serial.println("HATA: Dosya silme/yeniden yazma isleminde hata!");
+    if(originalFile) originalFile.close();
+    if(tempFile) tempFile.close();
+    return;
+  }
+
+  bool firstLineSkipped = false;
+  while (originalFile.available()) {
+    char c = originalFile.read();
+    if (!firstLineSkipped) {
+      if (c == '\n') {
+        firstLineSkipped = true;
+      }
+    } else {
+      tempFile.write(c);
+    }
+  }
+
+  originalFile.close();
+  tempFile.close();
+
+  SD.remove(filename);
+  SD.rename(tempLogFile, filename);
+
+  File f = SD.open(filename);
+  if (f && f.size() == 0) {
+    f.close();
+    SD.remove(filename);
+  } else if(f) {
+    f.close();
+  }
+}
