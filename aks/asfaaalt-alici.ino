@@ -33,20 +33,20 @@ void setup() {
   lcd.init();
   lcd.backlight();
 
-  Serial.println("Alıcı başlatıldı - Adres: 5, Kanal: 18, RSSI: Aktif");
-  Serial.println("Gelen mesajlar bekleniyor...");
+//  Serial.println("Alıcı başlatıldı - Adres: 5, Kanal: 18, RSSI: Aktif");
+//  Serial.println("Gelen mesajlar bekleniyor...");
 }
 
 void loop() {
   if (e220ttl.available() > 0) {
 
-    ResponseContainer rc = e220ttl.receiveMessageRSSI();
+    ResponseContainer rc = e220ttl.receiveMessage();
 
     Telemetri t = parseMessage(rc.data);
 
     if (rc.status.code == 1) {
+      e220ttl.sendFixedMessage(0, 6, 18, "ACK");
       Serial.println(rc.data);
-      yaz(0, (String) t.hiz);
     } else {
       Serial.print("Hata: ");
       Serial.println(rc.status.getResponseDescription());

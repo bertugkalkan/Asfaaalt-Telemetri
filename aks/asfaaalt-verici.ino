@@ -38,7 +38,10 @@ const float zeroCurrentVoltage = VCC / 2;
 void logUnsent(const String& data);
 String readFirstLine(const char* filename);
 void removeFirstLine(const char* filename);
-
+boolean getACK(unsigned long timeout);
+double getSpeed();
+void measurePeriod();
+float getCurrent();
 
 void setup() {
   Serial.begin(9600);
@@ -79,7 +82,8 @@ void loop() {
   
   if (backlogData.length() > 0) {
     // Birikmiş veri var. Göndermeyi dene.
-    if (e220ttl.sendFixedMessage(0, 5, 18, backlogData).isSuccess()) {
+    e220ttl.sendFixedMessage(0, 5, 18, backlogData);
+    if (getACK(3000)) {
       // BAŞARILIYSA
       outageStartTime = 0; // Bağlantı var demektir, kesinti sayacını sıfırla.
       Serial.println("Birikmis veri gonderildi: " + backlogData);
@@ -107,7 +111,8 @@ void loop() {
     }
   } else {
     // Birikmiş Yoksa Canlıya Hopla
-    if (e220ttl.sendFixedMessage(0, 5, 18, liveMessage).isSuccess()) {
+    e220ttl.sendFixedMessage(0, 5, 18, liveMessage);
+    if (getACK(3000)) {
       // BAŞARILI: Canlı veri gitti. Her şey yolunda.
       outageStartTime = 0; // Kesinti sayacını sıfır tut.
       Serial.println("Anlik veri gonderildi: " + liveMessage);
@@ -126,7 +131,7 @@ void loop() {
     }
   }
   
-  delay(2000);
+  delay(1500);
 }
 
 double getSpeed() {
@@ -168,7 +173,23 @@ void yaz(int cursor, String yazi) {
   lcd.print(yazi);
 }
 
-// --- YENİ EKLENEN SD KART FONKSİYONLARI ---
+boolean getACK(unsigned long timeout = 3000) {
+  unsigned long startTime = millis();
+  
+  while (millis() - startTime < timeout) {
+    if (e220ttl.available() > 0) {
+      ResponseContainer rc = e220ttl.receiveMessage();
+      
+      if (rc.status.code == 1) {
+        if (rc.data.indexOf("ACK") >= 0) {
+          return true;
+        }
+      }
+    }
+    delay(10);
+  }
+  return false; 
+}
 
 // Veriyi log dosyasının sonuna ekler
 void logUnsent(const String& data) {
@@ -198,18 +219,19 @@ String readFirstLine(const char* filename) {
   return firstLine;
 }
 
-// Dosyanın ilk satırını siler
+// Dosyanın ilk satırını siler (SD.rename uyumsuzluğu için düzeltildi)
 void removeFirstLine(const char* filename) {
   File originalFile = SD.open(filename, FILE_READ);
   File tempFile = SD.open(tempLogFile, FILE_WRITE);
 
   if (!originalFile || !tempFile) {
-    Serial.println("HATA: Dosya silme/yeniden yazma isleminde hata!");
+    Serial.println("HATA: removeFirstLine (Adım 1) - Dosya açılamadı!");
     if(originalFile) originalFile.close();
     if(tempFile) tempFile.close();
     return;
   }
 
+  // İlk satırı atlayarak geri kalanı geçici dosyaya yaz
   bool firstLineSkipped = false;
   while (originalFile.available()) {
     char c = originalFile.read();
@@ -221,18 +243,45 @@ void removeFirstLine(const char* filename) {
       tempFile.write(c);
     }
   }
-
   originalFile.close();
   tempFile.close();
 
+  // Orijinal dosyayı sil
   SD.remove(filename);
-  SD.rename(tempLogFile, filename);
 
+  // Geçici dosyayı okumak ve orijinal dosyayı yeniden yazmak için aç
+  tempFile = SD.open(tempLogFile, FILE_READ);
+  originalFile = SD.open(filename, FILE_WRITE);
+
+  if (!originalFile || !tempFile) {
+    Serial.println("HATA: removeFirstLine (Adım 2) - Dosya açılamadı!");
+    if(originalFile) originalFile.close();
+    if(tempFile) tempFile.close();
+    // Geçici dosyayı temizlemeyi dene
+    if (SD.exists(tempLogFile)) {
+       SD.remove(tempLogFile);
+    }
+    return;
+  }
+
+  // İçeriği geçici dosyadan orijinal dosyaya geri kopyala
+  while (tempFile.available()) {
+    originalFile.write(tempFile.read());
+  }
+  tempFile.close();
+  originalFile.close();
+
+  // Geçici dosyayı sil
+  SD.remove(tempLogFile);
+
+  // Eğer işlem sonrası dosya boş kaldıysa, dosyayı tamamen sil
   File f = SD.open(filename);
-  if (f && f.size() == 0) {
-    f.close();
-    SD.remove(filename);
-  } else if(f) {
-    f.close();
+  if (f) {
+    if (f.size() == 0) {
+      f.close();
+      SD.remove(filename);
+    } else {
+      f.close();
+    }
   }
 }
