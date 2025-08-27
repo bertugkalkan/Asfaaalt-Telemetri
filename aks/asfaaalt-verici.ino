@@ -1,6 +1,9 @@
 #include <SoftwareSerial.h>
 #include "LoRa_E220.h"
 #include <LiquidCrystal_I2C.h>
+#include <OneWire.h> 
+#include <DallasTemperature.h>
+#include <Wire.h>
 
 //bağlantı pinleri ayarlayın beyler
 #define M0_PIN 7
@@ -14,7 +17,7 @@ SoftwareSerial loraSerial(RX_PIN, TX_PIN);  // RX, TX
 
 LoRa_E220 e220ttl(&loraSerial, AUX_PIN, M0_PIN, M1_PIN);
 
-LiquidCrystal_I2C lcd(0x27,16,2);
+LiquidCrystal_I2C lcd(0x27,20,4);
 
 const int hallPin = 2; // Hall sensör giriş pini
 volatile unsigned long lastTime = 0;
@@ -27,6 +30,13 @@ const int sensorPin = A0;
 const float VCC = 5.0;
 const float sensitivity = 40.0; // mV/A (ACS758LCB-050B için)
 const float zeroCurrentVoltage = VCC / 2; // 2.5V
+
+double getSpeed();
+void measurePeriod();
+float getCurrent();
+void yaz(int cursor, String yazi);
+float getMaxTemperature();
+float getBatteryVoltage();
 
 void setup() {
   Serial.begin(9600);
@@ -46,9 +56,15 @@ void setup() {
 void loop() {
   double hiz = getSpeed();
   double zaman = millis();
-  double T_bat_C = getCurrent();
-  double V_bat_C = random(36, 54) / 1.0;
-  double kalan_enerji_Wh = random(0, 500);
+  double T_bat_C = getMaxTemperature();
+  double V_bat_C = getBatteryVoltage();
+  double kalan_enerji_Wh = getRemainingEnergyWh(V_bat_C);
+
+  yaz(1,hiz);
+  yaz(2,T_bat_C);
+  yaz(3,V_bat_C);
+  yaz(4,kalan_enerji_Wh);
+
 
   String message = String(zaman) + ";" +
                    String(hiz) + ";" +
@@ -63,7 +79,7 @@ void loop() {
   Serial.print("Durum: ");
   Serial.println(rs.getResponseDescription());
   
-  delay(2000);  
+  delay(500);  
 }
 
 double getSpeed() {
@@ -102,8 +118,47 @@ float getCurrent() {
   float current = (voltage - zeroCurrentVoltage) * 1000 / sensitivity;
   return current;
 }
+
 void yaz(int cursor, String yazi) {
   lcd.setCursor(0,cursor);
   lcd.print(yazi);
 }
 
+float getMaxTemperature() {
+  sensors.requestTemperatures();
+  int deviceCount = sensors.getDeviceCount();
+  float maxTemp = -100.0; // çok düşük başlangıç
+
+  for (int i = 0; i < deviceCount; i++) {
+    float tempC = sensors.getTempCByIndex(i);
+    if (tempC > maxTemp) {
+      maxTemp = tempC;
+    }
+  }
+  return maxTemp;
+}
+
+float getBatteryVoltage() {
+  int adcValue = analogRead(analogPin);
+  float Vtotal = (adcValue * VadcMax / ADCmax) * (R1 + R2) / R2;
+  return Vtotal;
+}
+
+float getRemainingEnergyWh(float vTotal) {
+  const float TOTAL_BATTERY_CAPACITY_WH = 2520.0; 
+  const float MAX_BATTERY_VOLTAGE = 50.4;        
+  const float MIN_BATTERY_VOLTAGE = 36.4;        
+
+
+  float chargeRatio = (vTotal - MIN_BATTERY_VOLTAGE) / (MAX_BATTERY_VOLTAGE - MIN_BATTERY_VOLTAGE);
+
+  if (chargeRatio > 1.0) {
+    chargeRatio = 1.0;
+  } else if (chargeRatio < 0.0) {
+    chargeRatio = 0.0;
+  }
+
+  float remainingWh = TOTAL_BATTERY_CAPACITY_WH * chargeRatio;
+
+  return remainingWh;
+}
