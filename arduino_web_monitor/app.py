@@ -6,7 +6,7 @@ from flask_socketio import SocketIO
 SERIAL_PORT = '/dev/tty.usbmodem14201'  
 BAUD_RATE = 9600
 
-app = Flask(__name__)
+app = Flask(_name_)
 
 app.config['SECRET_KEY'] = 'mysecretkey!'
 
@@ -23,22 +23,32 @@ def background_thread():
             with serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1) as ser:
                 print(f"{SERIAL_PORT} portuna bağlanıldı. Veri bekleniyor...")
                 while True:
-                    line = ser.readline().decode('utf-8').strip()
+                    line = ser.readline().decode('utf-8', errors='ignore').strip()
                     if line:
+                        with open('telemetry_data.txt', 'a', encoding='utf-8') as f:
+                            f.write(line + '\n')
+                        print(f"Ham veri alındı: '{line}'")
                         try:
                             parts = line.split(';')
+                            print(f"Parçalar: {parts}")
+
                             if len(parts) == 5:
+                                print("Parça sayısı 5, ayrıştırma denemesi...")
                                 data = {
-                                    'time_ms': int(parts[0]),
+                                    'time_ms': int(float(parts[0])),
                                     'speed_kmh': float(parts[1]),
                                     'temp_c': float(parts[2]),
                                     'voltage_v': float(parts[3]),
                                     'energy_wh': float(parts[4]),
                                 }
-                                # 'update_data' olayı ile veriyi tüm istemcilere gönder
+                                print(f"Ayrıştırma başarılı: {data}")
                                 socketio.emit('update_data', data)
-                        except (UnicodeDecodeError, ValueError, IndexError) as e:
+                            else:
+                                print(f"Hatalı parça sayısı: {len(parts)}")
+                        except (ValueError, IndexError) as e:
                             print(f"Veri ayrıştırılamadı: {e} -> Gelen veri: '{line}'")
+                    # else:
+                    #     print("Boş satır alındı.") 
         except serial.SerialException:
             print(f"Seri port bulunamadı veya bağlantı kesildi. 5 saniye sonra tekrar denenecek.")
             socketio.sleep(5)
@@ -53,13 +63,12 @@ def index():
 
 @socketio.on('connect')
 def connect():
-    """Yeni bir istemci bağlandığında çalışır."""
     global thread
     with thread_lock:
         if thread is None:
             thread = socketio.start_background_task(target=background_thread)
     print('İstemci bağlandı')
 
-if __name__ == '__main__':
+if _name_ == '_main_':
     print("Web sunucusu http://127.0.0.1:5000 adresinde başlatılıyor...")
     socketio.run(app, debug=True, use_reloader=False)
