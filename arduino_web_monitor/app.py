@@ -18,7 +18,6 @@ thread_lock = threading.Lock()
 connection_status = {'status': 'initializing'} 
 
 def background_thread():
-    """Seri portu dinleyen ve veri geldikçe arayüze gönderen arkaplan iş parçacığı."""
     global connection_status
 
     while True:
