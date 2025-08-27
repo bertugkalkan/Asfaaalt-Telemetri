@@ -12,6 +12,9 @@
 #define TX_PIN 3
 #define RX_PIN 2
 
+#define ONE_WIRE_BUS 2 
+OneWire oneWire(ONE_WIRE_BUS); 
+DallasTemperature sensors(&oneWire);
 
 SoftwareSerial loraSerial(RX_PIN, TX_PIN);  // RX, TX
 
@@ -30,6 +33,13 @@ const int sensorPin = A0;
 const float VCC = 5.0;
 const float sensitivity = 40.0; // mV/A (ACS758LCB-050B için)
 const float zeroCurrentVoltage = VCC / 2; // 2.5V
+
+const int analogPin = A0;
+const float R1 = 1000000.0; // 1 MΩ
+const float R2 = 100000.0;  // 100 kΩ
+const float VadcMax = 4.84;
+const int ADCmax = 1023;
+const int numCells = 12;
 
 double getSpeed();
 void measurePeriod();
@@ -60,10 +70,10 @@ void loop() {
   double V_bat_C = getBatteryVoltage();
   double kalan_enerji_Wh = getRemainingEnergyWh(V_bat_C);
 
-  yaz(1,hiz);
-  yaz(2,T_bat_C);
-  yaz(3,V_bat_C);
-  yaz(4,kalan_enerji_Wh);
+  yaz(1,(String) hiz);
+  yaz(2,(String) T_bat_C);
+  yaz(3,(String) V_bat_C);
+  yaz(4,(String) kalan_enerji_Wh);
 
 
   String message = String(zaman) + ";" +
