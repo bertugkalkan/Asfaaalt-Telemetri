@@ -2,7 +2,7 @@
 #include "LoRa_E220.h"
 #include <LiquidCrystal_I2C.h>
 
-//bağlantı pinleri ayarlayın
+//bağlantı pinleri ayarlayın beyler
 #define M0_PIN 7
 #define M1_PIN 6
 #define AUX_PIN 5
