@@ -25,11 +25,19 @@
             transform: translateY(-5px);
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
         }
+        /* Durum Bildirimleri İçin Ek Stil */
+        .alert-success { font-weight: bold; }
+        .alert-danger { font-weight: bold; }
+        .alert-info { font-weight: bold; }
+        .alert-warning { font-weight: bold; }
     </style>
 </head>
 <body>
     <div class="container mt-4">
         <h1 class="text-center mb-4">Gerçek Zamanlı Araç Veri Monitörü</h1>
+
+        <!-- Bağlantı Durumu Göstergesi -->
+        <div id="connection-status" class="text-center alert alert-warning mb-4">Bağlantı kuruluyor...</div>
 
         <!-- Rastgele Veri Modu Switch'i -->
         <div class="form-check form-switch d-flex justify-content-center align-items-center mb-4">
@@ -175,6 +183,7 @@
 
             // Socket.IO Bağlantısı
             const socket = io();
+            const statusElement = document.getElementById('connection-status');
 
             let isRandomMode = false;
             let randomDataInterval;
@@ -203,6 +212,8 @@
                 if (isRandomMode) {
                     console.log('Rastgele veri modu AKTİF.');
                     socket.disconnect();
+                    statusElement.textContent = 'Rastgele Veri Modu Aktif';
+                    statusElement.className = 'text-center alert alert-primary mb-4';
                     dataChart.data.labels = [];
                     dataChart.data.datasets.forEach((dataset) => {
                         dataset.data = [];
@@ -212,16 +223,52 @@
                 } else {
                     console.log('Rastgele veri modu KAPALI. Sunucuya bağlanılıyor...');
                     clearInterval(randomDataInterval);
+                    statusElement.textContent = 'Bağlantı kuruluyor...';
+                    statusElement.className = 'text-center alert alert-warning mb-4';
                     socket.connect();
                 }
             });
 
             socket.on('connect', () => {
-                console.log('Sunucuya başarıyla bağlanıldı!');
+                console.log('Sunucuya web soketi üzerinden başarıyla bağlanıldı!');
+                // Arayüzü güncelleme, sunucudan gelen connection_status bekleniyor.
+            });
+
+            socket.on('disconnect', () => {
+                console.log('Sunucu bağlantısı kesildi!');
+                statusElement.textContent = 'Sunucu Bağlantısı Kesildi!';
+                statusElement.className = 'text-center alert alert-danger mb-4';
+            });
+
+            socket.on('connection_status', function(data) {
+                if (isRandomMode) return; // Rastgele modda durumu değiştirme
+                
+                switch (data.status) {
+                    case 'connected':
+                        statusElement.textContent = 'Bağlantı Aktif';
+                        statusElement.className = 'text-center alert alert-success mb-4';
+                        break;
+                    case 'disconnected':
+                        statusElement.textContent = 'Bağlantı Kesildi! (Veri gelmiyor)';
+                        statusElement.className = 'text-center alert alert-danger mb-4';
+                        break;
+                    case 'waiting_for_data':
+                        statusElement.textContent = 'Porta bağlanıldı, veri bekleniyor...';
+                        statusElement.className = 'text-center alert alert-info mb-4';
+                        break;
+                    default:
+                        statusElement.textContent = 'Durum belirsiz...';
+                        statusElement.className = 'text-center alert alert-secondary mb-4';
+                }
             });
 
             socket.on('update_data', function(data) {
                 if (!isRandomMode) {
+                    // Veri geldiğinde durumun 'Bağlantı Aktif' olduğundan emin ol
+                    if (statusElement.textContent !== 'Bağlantı Aktif') {
+                        statusElement.textContent = 'Bağlantı Aktif';
+                        statusElement.className = 'text-center alert alert-success mb-4';
+                    }
                     updateUI(data);
                 }
             });
